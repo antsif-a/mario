@@ -8,7 +8,7 @@
 using namespace std;
 
 constexpr int map_width = 80;
-constexpr int map_height = 25;
+constexpr int map_height = 30;
 
 struct TObject {
     float x, y;
@@ -32,22 +32,16 @@ void clear_map() {
         sprintf(Map[j], "%s", Map[0]);
 }
 
-void show_map() {
-    int rows, cols;
-    getmaxyx(stdscr, rows, cols);
-
+void show_map(WINDOW * window) {
     Map[map_height - 1][map_width - 1] = '\0';
     for (int j = 0; j < map_height; ++j)
-        mvprintw(j + (rows - map_height) / 2, (cols - map_width) / 2, "%s", Map[j]);
+        mvwprintw(window, j, 0, "%s", Map[j]);
 }
 
-void set_object_pos(TObject &obj, float x, float y) {
-    obj.x = x;
-    obj.y = y;
-}
 
 void init_object(TObject &obj, float x, float y, float w, float h, char inType) {
-    set_object_pos(obj, x, y);
+    obj.x = x;
+    obj.y = y;
     obj.width = w;
     obj.height = h;
     obj.vert_speed = 0;
@@ -60,7 +54,7 @@ bool is_collision(TObject &o1, TObject &o2) {
 }
 
 void create_level() {
-    init_object(mario, 39, 10, 3, 3, '@');
+    init_object(mario, (map_width - 4) / 2 - (map_width / 6), 10, 4, 3, '@');
 
     if (level == 1) {
         bricks.clear();
@@ -97,7 +91,7 @@ void horizon_move_map(float dx) {
 void vert_move_object(TObject &obj) {
     obj.is_fly = true;
     obj.vert_speed += 0.05;
-    set_object_pos(obj, obj.x, obj.y + obj.vert_speed);
+    obj.y += obj.vert_speed;
     for (TObject &brick : bricks) {
         if (is_collision(obj, brick)) {
             obj.y = brick.y - obj.height;
@@ -129,20 +123,59 @@ void put_object_on_map(TObject &obj) {
                 Map[j][i] = obj.cType;
 }
 
-unordered_map<int, int> keys = {};
-enum KeyState {
-    KEY_RELEASE,
-    KEY_PRESS,
-    KEY_REPEAT
+/* --- input --- */
+
+enum struct Key {
+    A = KEY_A,
+    D = KEY_D,
+    Q = KEY_Q,
+    Space = KEY_SPACE
 };
 
-void ncurses_start() {
-    initscr();
-    curs_set(0);
+enum struct KeyState {
+    Release,
+    Press,
+    Repeat
+};
+
+void handle_keyboard_states(int fd, unordered_map<Key, KeyState> &keys) {
+    input_event ev = {};
+    while (read(fd, &ev, sizeof ev) != -1) {
+        if (ev.type == 1)
+            keys[static_cast<Key>(ev.code)] = static_cast<KeyState>(ev.value);
+    }
+}
+/* --- */
+
+bool should_quit = false;
+
+void update(unordered_map<Key, KeyState> &keys) {
+    if (keys[Key::Space] == KeyState::Press && !mario.is_fly)
+        mario.vert_speed = -1;
+
+    if (keys[Key::A] == KeyState::Press || keys[Key::A] == KeyState::Repeat)
+        horizon_move_map(1);
+
+    if (keys[Key::D] == KeyState::Press || keys[Key::D] == KeyState::Repeat)
+        horizon_move_map(-1);
+
+    if (keys[Key::Q] == KeyState::Press)
+        should_quit = true;
+
+    if (mario.y > map_height)
+        create_level();
+
+    vert_move_object(mario);
 }
 
-void ncurses_end() {
-    endwin();
+void render(WINDOW * window) {
+    clear_map();
+    put_object_on_map(mario);
+    for (TObject &brick : bricks)
+        put_object_on_map(brick);
+    show_map(window);
+    box(window, ACS_VLINE, ACS_HLINE);
+    wrefresh(window);
 }
 
 int main() {
@@ -152,44 +185,24 @@ int main() {
         return 1;
     }
 
-    ncurses_start();
+    unordered_map<Key, KeyState> keys = {};
+
+    initscr();
+    curs_set(0);
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+    WINDOW * game_window = newwin(map_height, map_width, (rows - map_height) / 2, (cols - map_width) / 2);
     
     create_level();
-
-    input_event ev;
-    for (;;) {
-        while (read(input_fd, &ev, sizeof ev) != -1) {
-            if (ev.type != 1)
-                continue;
-            if (ev.code == KEY_SPACE && ev.type == 1 && !mario.is_fly)
-                mario.vert_speed = -1;
-            keys[ev.code] = ev.value;
-        }
-
-        if (keys[KEY_SPACE] == KEY_PRESS && !mario.is_fly)
-            mario.vert_speed = -1;
-        if (keys[KEY_A] == KEY_PRESS || keys[KEY_A] == KEY_REPEAT)
-            horizon_move_map(1);
-        if (keys[KEY_D] == KEY_PRESS || keys[KEY_D] == KEY_REPEAT)
-            horizon_move_map(-1);
-        if (keys[KEY_Q] == KEY_PRESS)
-            break;
-
-        if (mario.y > map_height) create_level();
-        vert_move_object(mario);
-
-        clear_map();
-
-        put_object_on_map(mario);
-        for (TObject &brick : bricks)
-            put_object_on_map(brick);
-        show_map();
-        refresh();
-        napms(16);
+    while (!should_quit) {
+        handle_keyboard_states(input_fd, keys);
+        update(keys);
+        render(game_window);
+        napms(1000 / 60);
     };
 
-    ncurses_end();
+    delwin(game_window);
+    endwin();
     return 0;
 }
-
 
