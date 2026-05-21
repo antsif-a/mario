@@ -102,8 +102,9 @@ void vert_move_object(TObject * obj) {
             obj->is_fly = false;
             if (brick[i].cType == '+') {
                 ++level;
+                if (level > 2)
+                    level = 1;
                 create_level();
-                napms(1000);
             }
             break;
         }
@@ -125,7 +126,24 @@ void put_object_on_map(TObject obj) {
                 Map[j][i] = obj.cType;
 }
 
+#include <linux/input.h>
+#include <linux/input-event-codes.h>
+#include <fcntl.h>
+
+unordered_map<int, int> keys = {};
+enum KeyState {
+    KEY_RELEASE,
+    KEY_PRESS,
+    KEY_REPEAT
+};
+
 int main() {
+    int input_fd = open("/dev/input/event2", O_RDONLY | O_NONBLOCK);
+    if (input_fd < 0) {
+        println(stderr, "open /dev/input/event2: {}", strerror(errno));
+        return 1;
+    }
+    
     initscr();
     noecho();
     curs_set(0);
@@ -134,16 +152,23 @@ int main() {
 
     create_level();
 
-    char input;
+    input_event ev;
     for (;;) {
-        input = getch();
-        if (input == ' ' && !mario.is_fly)
+        while (read(input_fd, &ev, sizeof ev) != -1) {
+            if (ev.type != 1)
+                continue;
+            if (ev.code == KEY_SPACE && ev.type == 1 && !mario.is_fly)
+                mario.vert_speed = -1;
+            keys[ev.code] = ev.value;
+        }
+
+        if (keys[KEY_SPACE] == KEY_PRESS && !mario.is_fly)
             mario.vert_speed = -1;
-        if (input == 'a')
+        if (keys[KEY_A] == KEY_PRESS || keys[KEY_A] == KEY_REPEAT)
             horizon_move_map(1);
-        if (input == 'd')
+        if (keys[KEY_D] == KEY_PRESS || keys[KEY_D] == KEY_REPEAT)
             horizon_move_map(-1);
-        if (input == 'q')
+        if (keys[KEY_Q] == KEY_PRESS)
             break;
 
         if (mario.y > map_height) create_level();
@@ -162,3 +187,5 @@ int main() {
     endwin();
     return 0;
 }
+
+
