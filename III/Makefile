@@ -4,6 +4,6 @@ CXXFLAGS := --std=c++23 -Wall -Wextra -lncurses -I. -O3 -ffast-math
 all: main
 	./$<
 
-main: main.cpp input.cpp object.cpp
+main: main.cpp input.cpp object.cpp window.cpp game_map.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@
 

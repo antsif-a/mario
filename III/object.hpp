@@ -9,7 +9,10 @@ class GameObject {
             Player = '@',
             Brick  = '#',
             Money  = '$',
-            Enemy  = 'o'
+            MoneyBlock = '?',
+            MoneyBlockEmpty = '-',
+            Enemy  = 'o',
+            Final = '+'
         };
 
         float x;

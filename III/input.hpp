@@ -19,16 +19,17 @@ enum struct KeyState {
 };
 
 class InputHandler {
-    unsigned int input_fd;
-    std::unordered_map<Key, KeyState> key_states;
+    private:
+        unsigned int input_fd;
+        std::unordered_map<Key, KeyState> key_states;
 
-public:
-    InputHandler(std::filesystem::path input_event_device_path);
-    ~InputHandler();
+    public:
+        InputHandler(std::filesystem::path input_event_device_path);
+        ~InputHandler();
 
-    void poll_events();
-    bool is_pressed(Key key);
-    bool is_pressed_or_repeated(Key key);
+        void poll_events();
+        bool is_pressed(Key key);
+        bool is_pressed_or_repeated(Key key);
 };
 
 #endif
